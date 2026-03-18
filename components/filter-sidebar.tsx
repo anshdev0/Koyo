@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -11,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
-import { SlidersHorizontal, X } from 'lucide-react'
+import { SlidersHorizontal, X, FileText, Sparkles, CheckCircle2, Loader2 } from 'lucide-react'
 
 export interface Filters {
   jobTitle: string
@@ -28,7 +29,12 @@ interface FilterSidebarProps {
   onReset: () => void
   isOpen: boolean
   setIsOpen: (open: boolean) => void
+  onResumeMatch: (resumeText: string) => void
+  isMatching: boolean
+  resumeUploaded: boolean
 }
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL
 
 const locations = ['Remote', 'Bangalore', 'Mumbai', 'Delhi', 'Hyderabad', 'Pune']
 const jobTypes = ['Full-time', 'Part-time', 'Internship', 'Contract']
@@ -41,7 +47,14 @@ export function FilterSidebar({
   onReset,
   isOpen,
   setIsOpen,
+  onResumeMatch,
+  isMatching,
+  resumeUploaded,
 }: FilterSidebarProps) {
+  const [resumeText, setResumeText] = useState('')
+  const [showResumeInput, setShowResumeInput] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
+
   const handleJobTypeChange = (type: string, checked: boolean) => {
     if (checked) {
       setFilters({ ...filters, jobTypes: [...filters.jobTypes, type] })
@@ -51,6 +64,37 @@ export function FilterSidebar({
         jobTypes: filters.jobTypes.filter((t) => t !== type),
       })
     }
+  }
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append('resume', file)
+
+    try {
+      setPdfLoading(true)
+      const response = await fetch(`${API_URL}/api/jobs/extract-resume`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setResumeText(data.resumeText)
+      }
+    } catch (error) {
+      console.error('PDF upload error:', error)
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  const handleMatchResume = () => {
+    if (!resumeText.trim()) return
+    onResumeMatch(resumeText)
+    setShowResumeInput(false)
   }
 
   return (
@@ -201,8 +245,104 @@ export function FilterSidebar({
               </Select>
             </div>
 
+            {/* Resume Match Section */}
+            <div className="space-y-3 border-t border-border pt-6">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-primary" />
+                <Label className="text-sm font-medium">AI Resume Match</Label>
+              </div>
+
+              {/* Already matched state */}
+              {resumeUploaded && !showResumeInput && (
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
+                  <CheckCircle2 className="size-4 text-emerald-400" />
+                  <span className="text-xs text-emerald-400">
+                    Resume matched! Jobs sorted by fit.
+                  </span>
+                </div>
+              )}
+
+              {/* Toggle resume input */}
+              {!showResumeInput && (
+                <button
+                  onClick={() => setShowResumeInput(true)}
+                  className="w-full rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-3 text-center text-xs text-primary hover:bg-primary/10 transition-colors"
+                >
+                  <FileText className="mx-auto mb-1 size-4" />
+                  {resumeUploaded ? 'Update Resume' : 'Upload Resume to Get Match Scores'}
+                </button>
+              )}
+
+              {/* Resume PDF upload */}
+              {showResumeInput && (
+                <div className="space-y-2">
+                  <div
+                    className="w-full rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 px-3 py-4 text-center cursor-pointer hover:bg-primary/10 transition-colors"
+                    onClick={() => document.getElementById('resume-upload')?.click()}
+                  >
+                    {pdfLoading ? (
+                      <>
+                        <Loader2 className="mx-auto mb-2 size-6 text-primary animate-spin" />
+                        <p className="text-xs text-primary font-medium">
+                          Reading PDF...
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="mx-auto mb-2 size-6 text-primary" />
+                        <p className="text-xs text-primary font-medium">
+                          {resumeText ? '✓ PDF Loaded — Click to change' : 'Click to upload PDF resume'}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Max 5MB
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <input
+                    id="resume-upload"
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={handlePdfUpload}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleMatchResume}
+                      disabled={!resumeText.trim() || isMatching || pdfLoading}
+                      className="flex-1 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 text-xs"
+                      size="sm"
+                    >
+                      {isMatching ? (
+                        <>
+                          <Loader2 className="mr-1 size-3 animate-spin" />
+                          Matching...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="mr-1 size-3" />
+                          Find My Matches
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowResumeInput(false)
+                        setResumeText('')
+                      }}
+                      className="text-xs"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Action Buttons */}
-            <div className="flex gap-2 pt-4">
+            <div className="flex gap-2 pt-2">
               <Button
                 onClick={onApply}
                 className="flex-1 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90"

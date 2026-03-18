@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,8 +19,11 @@ import {
   Sparkles,
   CheckCircle2,
   Building2,
+  Loader2,
 } from 'lucide-react'
 import type { Job } from '@/lib/job-data'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL
 
 interface JobDetailModalProps {
   job: Job | null
@@ -28,12 +32,58 @@ interface JobDetailModalProps {
 }
 
 export function JobDetailModal({ job, isOpen, onClose }: JobDetailModalProps) {
+  const [aiSummary, setAiSummary] = useState<string[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
+
+  // Fetch AI summary when modal opens
+  useEffect(() => {
+    if (!job || !isOpen) return
+
+    // If job already has a summary, use it
+    if (job.aiSummary && job.aiSummary.length > 0) {
+      setAiSummary(job.aiSummary)
+      return
+    }
+
+    // Otherwise fetch from backend
+    const fetchSummary = async () => {
+      try {
+        setSummaryLoading(true)
+        const response = await fetch(`${API_URL}/api/jobs/summarize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId: job.id,
+            title: job.title,
+            company: job.company,
+            description: job.fullDescription,
+          }),
+        })
+
+        const data = await response.json()
+        if (data.success && data.summary.length > 0) {
+          setAiSummary(data.summary)
+        }
+      } catch (error) {
+        console.error('Error fetching summary:', error)
+      } finally {
+        setSummaryLoading(false)
+      }
+    }
+
+    fetchSummary()
+  }, [job, isOpen])
+
+  // Reset summary when modal closes
+  useEffect(() => {
+    if (!isOpen) setAiSummary([])
+  }, [isOpen])
+
   if (!job) return null
 
   const formatSalary = (min: number, max: number) => {
-    if (min < 1) {
-      return `₹${min * 100}K - ₹${max}L`
-    }
+    if (min === 0 && max === 0) return 'Salary not specified'
+    if (min < 1) return `₹${min * 100}K - ₹${max}L`
     return `₹${min}L - ₹${max}L`
   }
 
@@ -65,9 +115,11 @@ export function JobDetailModal({ job, isOpen, onClose }: JobDetailModalProps) {
                 </DialogDescription>
               </div>
             </div>
-            <Badge className={`${getMatchScoreColor(job.matchScore)} shrink-0`}>
-              {job.matchScore}% Match
-            </Badge>
+            {job.matchScore > 0 && (
+              <Badge className={`${getMatchScoreColor(job.matchScore)} shrink-0`}>
+                {job.matchScore}% Match
+              </Badge>
+            )}
           </div>
         </DialogHeader>
 
@@ -100,17 +152,36 @@ export function JobDetailModal({ job, isOpen, onClose }: JobDetailModalProps) {
                 AI Summary
               </span>
             </div>
-            <ul className="space-y-2">
-              {job.aiSummary.map((point, index) => (
-                <li
-                  key={index}
-                  className="flex items-start gap-2 text-sm text-foreground"
-                >
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span>{point}</span>
-                </li>
-              ))}
-            </ul>
+
+            {/* Loading state */}
+            {summaryLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Generating AI summary...</span>
+              </div>
+            )}
+
+            {/* Summary bullets */}
+            {!summaryLoading && aiSummary.length > 0 && (
+              <ul className="space-y-2">
+                {aiSummary.map((point, index) => (
+                  <li
+                    key={index}
+                    className="flex items-start gap-2 text-sm text-foreground"
+                  >
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Empty state */}
+            {!summaryLoading && aiSummary.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No summary available for this job.
+              </p>
+            )}
           </div>
 
           {/* Job Description */}
@@ -121,24 +192,6 @@ export function JobDetailModal({ job, isOpen, onClose }: JobDetailModalProps) {
             <p className="text-sm leading-relaxed text-muted-foreground">
               {job.fullDescription}
             </p>
-          </div>
-
-          {/* Requirements */}
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-foreground">
-              Requirements
-            </h3>
-            <ul className="space-y-1.5">
-              {job.requirements.map((req, index) => (
-                <li
-                  key={index}
-                  className="flex items-start gap-2 text-sm text-muted-foreground"
-                >
-                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
-                  <span>{req}</span>
-                </li>
-              ))}
-            </ul>
           </div>
 
           {/* Company Info */}
