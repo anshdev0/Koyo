@@ -8,6 +8,7 @@ import { JobDetailModal } from '@/components/job-detail-modal'
 import { type Job } from '@/lib/job-data'
 import { useJobs } from '@/hooks/useJobs'
 import { Briefcase, Loader2 } from 'lucide-react'
+import { JobCardSkeletonGrid } from '@/components/job-card-skeleton'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
 
@@ -165,14 +166,19 @@ export default function HomePage() {
           </div>
 
           {/* Loading State */}
-          {(loading || isMatching) && (
-            <div className="flex flex-col items-center justify-center py-16">
-              <Loader2 className="size-10 animate-spin text-muted-foreground" />
-              <p className="mt-4 text-muted-foreground">
-                {isMatching ? 'Matching your resume with jobs...' : 'Fetching jobs for you...'}
-              </p>
-            </div>
-          )}
+{loading && !isMatching && (
+  <JobCardSkeletonGrid />
+)}
+
+{/* Matching State */}
+{isMatching && (
+  <div className="flex flex-col items-center justify-center py-16">
+    <Loader2 className="size-10 animate-spin text-primary" />
+    <p className="mt-4 text-muted-foreground">
+      Matching your resume with jobs...
+    </p>
+  </div>
+)}
 
           {/* Error State */}
           {error && !loading && (
